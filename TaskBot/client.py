@@ -2,7 +2,7 @@ import requests
 import json
 
 
-def make_request(url, method='GET', params=None, data=None, headers=None):
+def make_request(url, method='GET', params=None, data=None, headers=None, echo=0):
     """
     Sends an HTTP request and prints the response.
 
@@ -21,20 +21,40 @@ def make_request(url, method='GET', params=None, data=None, headers=None):
 
     try:
         response = requests.request(method, url, params=params, data=data, headers=headers)
-        print(f"Request: {method} {url}")
+        if(echo):
+            print(f"Request: {method} {url}")
         if params:
-            print(f"Params: {params}")
+            if(echo):
+                print(f"Params: {params}")
         if data:
-            print(f"Data: {data}")
-        print(f"Status Code: {response.status_code}")
-        print(f"Response: {response.text}")
-        print("\n")
+            if(echo):
+                print(f"Data: {data}")
+        if(echo):
+            print(f"Status Code: {response.status_code}")
+            print(f"Response: {response.text}")
+            print("\n")
+        return {response.text}
     except requests.RequestException as e:
         print(f"Error during request: {e}")
 
 
 base_url = 'http://localhost:8000/tasks'
 
+"""
+crud_input = input('Which operation would you like to perform?\n1 = GET (default)\n2 = PUT\n3 = POST\n4 = DELETE\n')
+match crud_input:
+    case "1":
+        print("You have chosen GET")
+    case "2":
+        print("You have chosen PUT")
+    case "3":
+        print("You have chosen POST")
+    case "4":
+        print("You have chosen DELETE")
+    case _:
+        print("You have chosen GET")
+
+"""
 # Step 1: Create two tasks
 print("STEP 1: Create Task 1")
 task_1 = {
@@ -64,7 +84,8 @@ make_request(base_url, method='POST', data=task_2)
 
 # Step 2: Read all tasks
 print("STEP 2: Read all tasks")
-make_request(base_url)
+response = make_request(base_url)
+print(response)
 
 # Step 3: Update Task 2
 print("STEP 3: Update Task 2")
