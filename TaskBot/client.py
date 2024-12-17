@@ -33,26 +33,33 @@ def make_request(url, method='GET', params=None, data=None, headers=None, echo=0
             print(f"Status Code: {response.status_code}")
             print(f"Response: {response.text}")
             print("\n")
-        return {response.text}
+        return json.loads(response.text)
     except requests.RequestException as e:
         print(f"Error during request: {e}")
 
 
 base_url = 'http://localhost:8000/tasks'
 
-"""
-crud_input = input('Which operation would you like to perform?\n1 = GET (default)\n2 = PUT\n3 = POST\n4 = DELETE\n')
-match crud_input:
-    case "1":
-        print("You have chosen GET")
-    case "2":
-        print("You have chosen PUT")
-    case "3":
-        print("You have chosen POST")
-    case "4":
-        print("You have chosen DELETE")
-    case _:
-        print("You have chosen GET")
+print("Choose Task from List using number or enter 0 to create")
+response = make_request(base_url)
+#print("response:")
+#print(response)
+if response:
+    # Iterate through the list and print the "name" field
+    print("Task Names:")
+    iterator = 0
+    name_array = []
+    for item in response:
+        name_array.append(item.get('name'))
+        print(f"{iterator+1} = {name_array[iterator]}")
+        iterator += 1
+
+task_number = input()
+task_number = int(task_number) - 1
+if(name_array[task_number] is not None and name_array[task_number] != ""):
+    print(f"You chose: {name_array[task_number]}")
+else:
+    print("ERROR")
 
 """
 # Step 1: Create two tasks
@@ -87,6 +94,7 @@ print("STEP 2: Read all tasks")
 response = make_request(base_url)
 print(response)
 
+
 # Step 3: Update Task 2
 print("STEP 3: Update Task 2")
 updated_task_2 = {
@@ -115,3 +123,19 @@ make_request(base_url, params={'name': 'Task2'})
 # Step 7: Read all tasks again
 print("STEP 7: Read all tasks after deletion")
 make_request(base_url)
+
+
+crud_input = input('Which operation would you like to perform?\n1 = GET (default)\n2 = PUT\n3 = POST\n4 = DELETE\n')
+match crud_input:
+    case "1":
+        print("You have chosen GET")
+    case "2":
+        print("You have chosen PUT")
+    case "3":
+        print("You have chosen POST")
+    case "4":
+        print("You have chosen DELETE")
+    case _:
+        print("You have chosen GET")
+
+"""
