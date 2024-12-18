@@ -6,7 +6,6 @@ from urllib.parse import urlparse, parse_qs
 import threading
 import time
 from datetime import datetime, timedelta
-import schedule
 
 # Initialize SQLite Database
 DATABASE_FILE = "tasks.db"
@@ -20,13 +19,71 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT UNIQUE NOT NULL,
             operation TEXT NOT NULL,
-            destination TEXT NOT NULL,
             type TEXT NOT NULL,
             interval TEXT NOT NULL,
-            next_execution TEXT NOT NULL
+            next_execution TEXT NOT NULL,
+            destination TEXT NOT NULL,
+            payload TEXT
         )
         """)
         conn.commit()
+
+
+class TaskScheduler:
+    def __init__(self, database_file):
+        self.database_file = database_file
+        self.running = True
+
+    def fetch_due_tasks(self):
+        # Fetch tasks that are due for execution.
+        with sqlite3.connect(self.database_file) as conn:
+            cursor = conn.cursor()
+            now = datetime.now().isoformat()
+            cursor.execute("""
+            SELECT id, name, operation, type, interval, destination, payload, next_execution
+            FROM tasks
+            WHERE next_execution <= ?
+            """, (now,))
+            return cursor.fetchall()
+
+    def execute_task(self, task):
+        # Execute the task and update the database accordingly.
+        task_id, name, operation, task_type, interval, destination, payload, next_execution = task
+        print(f"Executing task: {name}")
+
+        try:
+            # Perform the task operation (placeholder logic)
+            print(f"Operation: {operation}, Destination: {destination}, Payload: {payload}")
+
+            # Update task schedule
+            with sqlite3.connect(self.database_file) as conn:
+                cursor = conn.cursor()
+                if task_type == 'interval':
+                    next_exec_time = datetime.now() + timedelta(seconds=int(interval))
+                    cursor.execute("""
+                    UPDATE tasks SET next_execution = ? WHERE id = ?
+                    """, (next_exec_time.isoformat(), task_id))
+                elif task_type == 'single':
+                    cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+                conn.commit()
+        except Exception as e:
+            print(f"Error executing task {name}: {e}")
+
+    def task_execution_loop(self):
+        # Continuously check and execute due tasks.
+        print("Task Scheduler running...")
+        while self.running:
+            try:
+                due_tasks = self.fetch_due_tasks()
+                if due_tasks:
+                    print(f"Found {len(due_tasks)} due task(s).")
+                for task in due_tasks:
+                    self.execute_task(task)
+            except Exception as e:
+                print(f"Error in task execution loop: {e}")
+            time.sleep(1)  # Check for tasks every second
+
+
 
 class MyHandler(http.server.SimpleHTTPRequestHandler):
     def _set_headers(self, status_code=200):
@@ -57,9 +114,17 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
             cursor = conn.cursor()
             try:
                 cursor.execute("""
-                INSERT INTO tasks (name, operation, destination, parameters)
-                VALUES (?, ?, ?, ?)
-                """, (task_data["name"], task_data["operation"], task_data["destination"], json.dumps(task_data["Parameters"])))
+                INSERT INTO tasks (name, operation, type, interval, next_execution, destination, payload)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    task_data["name"],
+                    task_data["operation"],
+                    task_data["type"],
+                    task_data["interval"],
+                    task_data["next_execution"],
+                    task_data["destination"],
+                    task_data.get("payload", None)
+                ))
                 conn.commit()
                 return True, None
             except sqlite3.IntegrityError as e:
@@ -71,9 +136,17 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
             cursor = conn.cursor()
             cursor.execute("""
             UPDATE tasks
-            SET operation = ?, destination = ?, parameters = ?
+            SET operation = ?, type = ?, interval = ?, next_execution = ?, destination = ?, payload = ?
             WHERE name = ?
-            """, (task_data["operation"], task_data["destination"], json.dumps(task_data["Parameters"]), task_name))
+            """, (
+                task_data["operation"],
+                task_data["type"],
+                task_data["interval"],
+                task_data["next_execution"],
+                task_data["destination"],
+                task_data.get("payload", None),
+                task_name
+            ))
             conn.commit()
             return cursor.rowcount > 0
 
@@ -89,40 +162,30 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
         # Fetch tasks that are due for execution.
         with sqlite3.connect(DATABASE_FILE) as conn:
             cursor = conn.cursor()
-            now = datetime.now()
+            now = datetime.now().isoformat()
             cursor.execute("""
-            SELECT id, name, operation, destination, parameters, type, next_execution
+            SELECT id, name, operation, type, interval, destination, payload, next_execution
             FROM tasks
             WHERE next_execution <= ?
             """, (now,))
             return cursor.fetchall()
-        
+
     def execute_task(self, task):
         # Execute a task and update the last execution time.
-        task_id, name, operation, destination, parameters, task_type, interval, next_execution = task
-        parameters = json.loads(parameters)
-        self.wfile.write(json.dumps({"message": "Executing task: {name}"}).encode())
+        task_id, name, operation, task_type, interval, destination, payload, next_execution = task
+        print(f"Executing task: {name}")
         with sqlite3.connect(DATABASE_FILE) as conn:
             cursor = conn.cursor()
             if task_type == 'interval':
                 # Schedule the next execution
-                next_exec_time = datetime.now() + timedelta(seconds=interval)
+                next_exec_time = datetime.now() + timedelta(seconds=int(interval))
                 cursor.execute("""
                 UPDATE tasks SET next_execution = ? WHERE id = ?
-                """, (next_exec_time, task_id))
+                """, (next_exec_time.isoformat(), task_id))
             elif task_type == 'single':
                 # Remove the task after execution
                 cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
             conn.commit()
-
-    def task_execution_loop(self):
-        # Continuously check for due tasks and execute them.
-        while True:
-            due_tasks = self.fetch_due_tasks()
-            for task in due_tasks:
-                self.execute_task(task)
-            time.sleep(1) # Loop every second, adjust as needed
-
 
 
     def do_POST(self):
@@ -152,8 +215,8 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                 if task:
                     self._set_headers(200)
                     self.wfile.write(json.dumps({
-                        "id": task[0], "name": task[1], "operation": task[2],
-                        "destination": task[3], "Parameters": json.loads(task[4])
+                        "id": task[0], "name": task[1], "operation": task[2], "type": task[3],
+                        "interval": task[4], "next_execution": task[5], "destination": task[6], "payload": task[7]
                     }).encode())
                 else:
                     self._set_headers(404)
@@ -162,8 +225,10 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                 tasks = self.fetch_tasks()
                 self._set_headers(200)
                 self.wfile.write(json.dumps([
-                    {"id": t[0], "name": t[1], "operation": t[2], "destination": t[3], "Parameters": json.loads(t[4])}
-                    for t in tasks
+                    {
+                        "id": t[0], "name": t[1], "operation": t[2], "type": t[3],
+                        "interval": t[4], "next_execution": t[5], "destination": t[6], "payload": t[7]
+                    } for t in tasks
                 ]).encode())
 
     def do_PUT(self):
@@ -197,14 +262,12 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                     self._set_headers(404)
                     self.wfile.write(json.dumps({"error": "Task not found"}).encode())
 
-
-
 # Initialize the database
 init_db()
 
-# Start the task execution loop in a separate thread
-server = MyHandler
-execution_thread = threading.Thread(target=server.task_execution_loop, daemon=True)
+# Start the Task Scheduler
+scheduler = TaskScheduler(DATABASE_FILE)
+execution_thread = threading.Thread(target=scheduler.task_execution_loop, daemon=True)
 execution_thread.start()
 
 # Start the server
