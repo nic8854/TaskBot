@@ -14,8 +14,8 @@ def init_db():
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL,
-            description TEXT NOT NULL
+            timestamp TEXT UNIQUE NOT NULL,
+            payload TEXT
         )
         """)
         conn.commit()
@@ -32,48 +32,48 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
         content_length = int(self.headers.get('Content-Length', 0))
         return self.rfile.read(content_length).decode('utf-8')
 
-    def fetch_items(self, item_name=None):
+    def fetch_items(self, item_id=None):
         """Fetch items from the database."""
         with sqlite3.connect(DATABASE_FILE) as conn:
             cursor = conn.cursor()
-            if item_name:
-                cursor.execute("SELECT * FROM items WHERE name = ?", (item_name,))
+            if item_id:
+                cursor.execute("SELECT * FROM items WHERE id = ?", (item_id,))
                 return cursor.fetchone()
             else:
                 cursor.execute("SELECT * FROM items")
                 return cursor.fetchall()
 
     def add_item(self, item_data):
-        """Add a item to the database."""
+        """Add an item to the database."""
         with sqlite3.connect(DATABASE_FILE) as conn:
             cursor = conn.cursor()
             try:
                 cursor.execute("""
-                INSERT INTO items (name, description)
+                INSERT INTO items (timestamp, payload)
                 VALUES (?, ?)
-                """, (item_data["name"], item_data["description"]))
+                """, (item_data["timestamp"], item_data["payload"]))
                 conn.commit()
                 return True, None
             except sqlite3.IntegrityError as e:
                 return False, str(e)
 
-    def update_item(self, item_name, item_data):
+    def update_item(self, item_id, item_data):
         """Update an existing item in the database."""
         with sqlite3.connect(DATABASE_FILE) as conn:
             cursor = conn.cursor()
             cursor.execute("""
             UPDATE items
-            SET operation = ?, destination = ?, parameters = ?
-            WHERE name = ?
-            """, (item_data["operation"], item_data["destination"], json.dumps(item_data["Parameters"]), item_name))
+            SET timestamp = ?, payload = ?
+            WHERE id = ?
+            """, (item_data["timestamp"], item_data["payload"], item_id))
             conn.commit()
             return cursor.rowcount > 0
 
-    def delete_item(self, item_name):
-        """Delete a item from the database."""
+    def delete_item(self, item_id):
+        """Delete an item from the database."""
         with sqlite3.connect(DATABASE_FILE) as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM items WHERE name = ?", (item_name,))
+            cursor.execute("DELETE FROM items WHERE id = ?", (item_id,))
             conn.commit()
             return cursor.rowcount > 0
 
@@ -98,13 +98,13 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
         parsed_path = urlparse(self.path)
         query = parse_qs(parsed_path.query)
         if parsed_path.path == '/items':
-            item_name = query.get('name', [None])[0]
-            if item_name:
-                item = self.fetch_items(item_name)
+            item_id = query.get('id', [None])[0]
+            if item_id:
+                item = self.fetch_items(item_id)
                 if item:
                     self._set_headers(200)
                     self.wfile.write(json.dumps({
-                        "id": item[0], "name": item[1], "description": item[2]
+                        "id": item[0], "timestamp": item[1], "payload": item[2]
                     }).encode())
                 else:
                     self._set_headers(404)
@@ -113,19 +113,19 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                 items = self.fetch_items()
                 self._set_headers(200)
                 self.wfile.write(json.dumps([
-                    {"id": t[0], "name": t[1], "description": t[2]}
+                    {"id": t[0], "timestamp": t[1], "payload": t[2]}
                     for t in items
                 ]).encode())
 
     def do_PUT(self):
-        """Handle PUT requests to update a item."""
+        """Handle PUT requests to update an item."""
         parsed_path = urlparse(self.path)
         query = parse_qs(parsed_path.query)
         if parsed_path.path == '/items':
-            item_name = query.get('name', [None])[0]
-            if item_name:
+            item_id = query.get('id', [None])[0]
+            if item_id:
                 item_data = json.loads(self._read_content())
-                success = self.update_item(item_name, item_data)
+                success = self.update_item(item_id, item_data)
                 if success:
                     self._set_headers(200)
                     self.wfile.write(json.dumps({"message": "item updated"}).encode())
@@ -134,13 +134,13 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                     self.wfile.write(json.dumps({"error": "item not found"}).encode())
 
     def do_DELETE(self):
-        """Handle DELETE requests to remove a item."""
+        """Handle DELETE requests to remove an item."""
         parsed_path = urlparse(self.path)
         query = parse_qs(parsed_path.query)
         if parsed_path.path == '/items':
-            item_name = query.get('name', [None])[0]
-            if item_name:
-                success = self.delete_item(item_name)
+            item_id = query.get('id', [None])[0]
+            if item_id:
+                success = self.delete_item(item_id)
                 if success:
                     self._set_headers(200)
                     self.wfile.write(json.dumps({"message": "item deleted"}).encode())
