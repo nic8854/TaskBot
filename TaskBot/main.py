@@ -6,6 +6,7 @@ from urllib.parse import urlparse, parse_qs
 import threading
 import time
 from datetime import datetime, timedelta
+import requests
 
 # Initialize SQLite Database
 DATABASE_FILE = "tasks.db"
@@ -52,8 +53,8 @@ class TaskScheduler:
         print(f"Executing task: {name}")
 
         try:
-            # Perform the task operation (placeholder logic)
-            print(f"Operation: {operation}, Destination: {destination}, Payload: {payload}")
+            # Perform the task operation
+            self.make_request(destination, method=operation, data=payload)
 
             # Update task schedule
             with sqlite3.connect(self.database_file) as conn:
@@ -69,14 +70,42 @@ class TaskScheduler:
         except Exception as e:
             print(f"Error executing task {name}: {e}")
 
+    def make_request(self,url, method=None, params=None, data=None, headers=None):
+        """
+        Sends an HTTP request and prints the response.
+        Args:
+            url (str): The endpoint URL.
+            method (str): The HTTP method (GET, POST, PUT, DELETE).
+            params (dict): URL query parameters.
+            data (dict/str): Request body payload.
+            headers (dict): HTTP headers.
+        """
+        
+        if headers is None:
+            headers = {'Content-Type': 'application/json'}
+        if isinstance(data, dict):  # Ensure the payload is serialized if it's a dictionary
+            data = json.dumps(data)
+
+        try:
+            response = requests.request(method, url, params=params, data=data, headers=headers)
+            print(f"Request: {method} {url}")
+            if params:
+                print(f"Params: {params}")
+            if data:
+                print(f"Data: {data}")
+            print(f"Status Code: {response.status_code}")
+            print(f"Response: {response.text}")
+            print("\n")
+        except requests.RequestException as e:
+            print(f"Error during request: {e}")
+
     def task_execution_loop(self):
         # Continuously check and execute due tasks.
         print("Task Scheduler running...")
+        # TODO: Add a way to stop the scheduler
         while self.running:
             try:
                 due_tasks = self.fetch_due_tasks()
-                if due_tasks:
-                    print(f"Found {len(due_tasks)} due task(s).")
                 for task in due_tasks:
                     self.execute_task(task)
             except Exception as e:
@@ -158,35 +187,6 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
             conn.commit()
             return cursor.rowcount > 0
 
-    def fetch_due_tasks(self):
-        # Fetch tasks that are due for execution.
-        with sqlite3.connect(DATABASE_FILE) as conn:
-            cursor = conn.cursor()
-            now = datetime.now().isoformat()
-            cursor.execute("""
-            SELECT id, name, operation, type, interval, destination, payload, next_execution
-            FROM tasks
-            WHERE next_execution <= ?
-            """, (now,))
-            return cursor.fetchall()
-
-    def execute_task(self, task):
-        # Execute a task and update the last execution time.
-        task_id, name, operation, task_type, interval, destination, payload, next_execution = task
-        print(f"Executing task: {name}")
-        with sqlite3.connect(DATABASE_FILE) as conn:
-            cursor = conn.cursor()
-            if task_type == 'interval':
-                # Schedule the next execution
-                next_exec_time = datetime.now() + timedelta(seconds=int(interval))
-                cursor.execute("""
-                UPDATE tasks SET next_execution = ? WHERE id = ?
-                """, (next_exec_time.isoformat(), task_id))
-            elif task_type == 'single':
-                # Remove the task after execution
-                cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
-            conn.commit()
-
 
     def do_POST(self):
         # Handle POST requests to add a new task.
@@ -261,6 +261,7 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                 else:
                     self._set_headers(404)
                     self.wfile.write(json.dumps({"error": "Task not found"}).encode())
+
 
 # Initialize the database
 init_db()

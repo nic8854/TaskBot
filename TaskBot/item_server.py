@@ -3,6 +3,8 @@ import socketserver
 import json
 import sqlite3
 from urllib.parse import urlparse, parse_qs
+import time
+from datetime import datetime, timedelta
 
 # Initialize SQLite Database
 DATABASE_FILE = "items.db"
@@ -14,7 +16,7 @@ def init_db():
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT UNIQUE NOT NULL,
+            timestamp TEXT NOT NULL,
             payload TEXT
         )
         """)
@@ -47,11 +49,12 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
         """Add an item to the database."""
         with sqlite3.connect(DATABASE_FILE) as conn:
             cursor = conn.cursor()
+            now = datetime.now().isoformat()
             try:
                 cursor.execute("""
                 INSERT INTO items (timestamp, payload)
                 VALUES (?, ?)
-                """, (item_data["timestamp"], item_data["payload"]))
+                """, (now, item_data["payload"]))
                 conn.commit()
                 return True, None
             except sqlite3.IntegrityError as e:
@@ -61,11 +64,12 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
         """Update an existing item in the database."""
         with sqlite3.connect(DATABASE_FILE) as conn:
             cursor = conn.cursor()
+            now = datetime.now().isoformat()
             cursor.execute("""
             UPDATE items
             SET timestamp = ?, payload = ?
             WHERE id = ?
-            """, (item_data["timestamp"], item_data["payload"], item_id))
+            """, (now, item_data["payload"], item_id))
             conn.commit()
             return cursor.rowcount > 0
 
