@@ -21,8 +21,8 @@ def init_db():
             name TEXT UNIQUE NOT NULL,
             operation TEXT NOT NULL,
             type TEXT NOT NULL,
-            interval TEXT NOT NULL,
-            next_execution TEXT NOT NULL,
+            interval INTEGER,
+            next_execution TEXT,
             destination TEXT NOT NULL,
             payload TEXT
         )
@@ -40,12 +40,25 @@ class TaskScheduler:
         with sqlite3.connect(self.database_file) as conn:
             cursor = conn.cursor()
             now = datetime.now().isoformat()
+            # Parse next_execution as ISO 8601 before comparing
+            def parse_isoformat(next_execution):
+                try:
+                    return datetime.fromisoformat(next_execution)
+                except ValueError:
+                    raise ValueError(f"Invalid date format: {next_execution}")
+            
             cursor.execute("""
             SELECT id, name, operation, type, interval, destination, payload, next_execution
             FROM tasks
-            WHERE next_execution <= ?
-            """, (now,))
-            return cursor.fetchall()
+            """)
+            
+            # Filter the tasks in Python
+            all_tasks = cursor.fetchall()
+            due_tasks = [
+                task for task in all_tasks
+                if parse_isoformat(task[-1]) <= datetime.fromisoformat(now)
+            ]
+            return due_tasks
 
     def execute_task(self, task):
         # Execute the task and update the database accordingly.
@@ -54,17 +67,18 @@ class TaskScheduler:
 
         try:
             # Perform the task operation
-            self.make_request(destination, method=operation, data=payload)
+            success = self.make_request(destination, method=operation, data=payload)
 
             # Update task schedule
             with sqlite3.connect(self.database_file) as conn:
                 cursor = conn.cursor()
                 if task_type == 'interval':
                     next_exec_time = datetime.now() + timedelta(seconds=int(interval))
+                    print("Next execution time:", next_exec_time.isoformat())
                     cursor.execute("""
                     UPDATE tasks SET next_execution = ? WHERE id = ?
                     """, (next_exec_time.isoformat(), task_id))
-                elif task_type == 'single':
+                elif task_type == 'single' and success:
                     cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
                 conn.commit()
         except Exception as e:
@@ -80,7 +94,7 @@ class TaskScheduler:
             data (dict/str): Request body payload.
             headers (dict): HTTP headers.
         """
-        
+
         if headers is None:
             headers = {'Content-Type': 'application/json'}
         if isinstance(data, dict):  # Ensure the payload is serialized if it's a dictionary
@@ -96,8 +110,10 @@ class TaskScheduler:
             print(f"Status Code: {response.status_code}")
             print(f"Response: {response.text}")
             print("\n")
+            return  True
         except requests.RequestException as e:
             print(f"Error during request: {e}")
+            return  False
 
     def task_execution_loop(self):
         # Continuously check and execute due tasks.
@@ -107,6 +123,7 @@ class TaskScheduler:
             try:
                 due_tasks = self.fetch_due_tasks()
                 for task in due_tasks:
+                    print("Current time:", datetime.now().isoformat(), "vs Next execution time:", task[7])
                     self.execute_task(task)
             except Exception as e:
                 print(f"Error in task execution loop: {e}")
@@ -142,6 +159,14 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
         with sqlite3.connect(DATABASE_FILE) as conn:
             cursor = conn.cursor()
             try:
+                # Set default values for interval and next_execution
+                interval = task_data.get("interval")
+                if interval is None:
+                    interval = 600  # default to 10 minutes if interval is None
+                next_execution = task_data.get("next_execution")
+                if next_execution is None:
+                    next_execution = datetime.now().isoformat()
+
                 cursor.execute("""
                 INSERT INTO tasks (name, operation, type, interval, next_execution, destination, payload)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -149,8 +174,8 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                     task_data["name"],
                     task_data["operation"],
                     task_data["type"],
-                    task_data["interval"],
-                    task_data["next_execution"],
+                    interval,
+                    next_execution,
                     task_data["destination"],
                     task_data.get("payload", None)
                 ))

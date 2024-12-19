@@ -77,9 +77,13 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
         """Delete an item from the database."""
         with sqlite3.connect(DATABASE_FILE) as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM items WHERE id = ?", (item_id,))
-            conn.commit()
-            return cursor.rowcount > 0
+            try:
+                cursor.execute("DELETE FROM items WHERE id = ?", (item_id,))
+                conn.commit()
+                return cursor.rowcount > 0
+            except sqlite3.Error as e:
+                print(f"Database error during deletion: {e}")
+                return False
 
     def do_POST(self):
         """Handle POST requests to add a new item."""
@@ -151,6 +155,9 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                 else:
                     self._set_headers(404)
                     self.wfile.write(json.dumps({"error": "item not found"}).encode())
+            else:
+                self._set_headers(400)
+                self.wfile.write(json.dumps({"error": "Missing 'id' parameter"}).encode())
 
 # Initialize the database
 init_db()
