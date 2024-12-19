@@ -74,7 +74,6 @@ class TaskScheduler:
                 cursor = conn.cursor()
                 if task_type == 'interval':
                     next_exec_time = datetime.now() + timedelta(seconds=int(interval))
-                    print("Next execution time:", next_exec_time.isoformat())
                     cursor.execute("""
                     UPDATE tasks SET next_execution = ? WHERE id = ?
                     """, (next_exec_time.isoformat(), task_id))
@@ -123,7 +122,6 @@ class TaskScheduler:
             try:
                 due_tasks = self.fetch_due_tasks()
                 for task in due_tasks:
-                    print("Current time:", datetime.now().isoformat(), "vs Next execution time:", task[7])
                     self.execute_task(task)
             except Exception as e:
                 print(f"Error in task execution loop: {e}")
