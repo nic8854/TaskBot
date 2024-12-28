@@ -130,8 +130,9 @@ match crud_input:
         param_name = param_array[param_number]
 
         param_value = input("Enter value: ")
-
+        print("PUT is in progress...")
         make_request(base_url, method='PUT', params={'name': chosen_task_name}, data={param_name : param_value}, echo=1)
+        print("PUT is in finished")
     case "2":
         print("You have chosen DELETE")
         time.sleep(1)
@@ -139,90 +140,8 @@ match crud_input:
         print("DELETE is in progress...")
         make_request(base_url, method='DELETE', params={'name': chosen_task_name})
         print("DELETE is in finished")
-        exit()
     case _:
         print("ERROR")
 
 time.sleep(1)
 clear()
-
-
-"""
-# Step 1: Create two tasks
-print("STEP 1: Create Task 1")
-task_1 = {
-    "name": "Task3",
-    "operation": "get",
-    "destination": "http://example.com/task1",
-    "Parameters": {
-        "type": "interval",
-        "duration": 30,
-        "log": 1
-    }
-}
-make_request(base_url, method='POST', data=task_1)
-
-print("STEP 1: Create Task 2")
-task_2 = {
-    "name": "Task4",
-    "operation": "post",
-    "destination": "http://example.com/task2",
-    "Parameters": {
-        "type": "burst",
-        "duration": 60,
-        "log": 0
-    }
-}
-make_request(base_url, method='POST', data=task_2)
-
-
-# Step 2: Read all tasks
-print("STEP 2: Read all tasks")
-response = make_request(base_url)
-print(response)
-
-
-# Step 3: Update Task 2
-print("STEP 3: Update Task 2")
-updated_task_2 = {
-    "operation": "put",
-    "destination": "http://example.com/task2/updated",
-    "Parameters": {
-        "type": "random",
-        "duration": 45,
-        "log": 1
-    }
-}
-make_request(base_url, method='PUT', params={'name': 'Task2'}, data=updated_task_2)
-
-# Step 4: Read Task 2
-print("STEP 4: Read Task 2")
-make_request(base_url, params={'name': 'Task2'})
-
-# Step 5: Delete Task 2
-print("STEP 5: Delete Task 2")
-make_request(base_url, method='DELETE', params={'name': 'Task2'})
-
-# Step 6: Verify Task 2 Deletion
-print("STEP 6: Verify Task 2 Deletion")
-make_request(base_url, params={'name': 'Task2'})
-
-# Step 7: Read all tasks again
-print("STEP 7: Read all tasks after deletion")
-make_request(base_url)
-
-
-crud_input = input('Which operation would you like to perform?\n1 = GET (default)\n2 = PUT\n3 = POST\n4 = DELETE\n')
-match crud_input:
-    case "1":
-        print("You have chosen GET")
-    case "2":
-        print("You have chosen PUT")
-    case "3":
-        print("You have chosen POST")
-    case "4":
-        print("You have chosen DELETE")
-    case _:
-        print("You have chosen GET")
-
-"""
