@@ -44,10 +44,12 @@ def make_request(url, method='GET', params=None, data=None, headers=None, echo=0
 base_url = 'http://localhost:8000/tasks'
 
 
-
+clear()
+print("Getting List of Tasks...")
 response = make_request(base_url)
-#print("response:")
-#print(response)
+
+clear()
+
 if response:
     # Iterate through the list and print the "name" field
     print("Task Names:")
@@ -61,16 +63,16 @@ if response:
 task_number = input("Choose Task from List using number or enter 0 to CREATE: ")
 task_number = int(task_number) - 1
 if(name_array[task_number] is not None and name_array[task_number] != ""):
-    print(f"\nYou chose: {name_array[task_number]}")
+    clear()
     chosen_task_name = name_array[task_number]
 else:
     print("ERROR")
 
-print("GET request executing...\n")
+print(f"getting Data for \"{name_array[task_number]}\"...")
 
 chosen_task_response = make_request(base_url, params={'name': chosen_task_name})
 clear()
-print(f"Data for {name_array[task_number]}")
+print(f"Data for \"{name_array[task_number]}\":")
 
 print(json.dumps(chosen_task_response, indent=2))
 
@@ -78,12 +80,12 @@ crud_input = input('0 = leave\n1 = PUT\n2 = DELETE\nWould you like to perform an
 match crud_input:
     case "0":
         print("You have chosen to leave")
+        time.sleep(1)
         exit()
     case "1":
+        print("You have chosen PUT")
         time.sleep(1)
         clear()
-
-        print("You have chosen PUT")
         print(f"Data for {name_array[task_number]}")
         print(json.dumps(chosen_task_response, indent=2))
 
