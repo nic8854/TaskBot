@@ -101,7 +101,7 @@ match crud_input:
 
         param_value = input("Enter value: ")
 
-        make_request(base_url, method='PUT', params={'name': chosen_task_name}, data={"operation" : "put"}, echo=1)
+        make_request(base_url, method='PUT', params={'name': chosen_task_name}, data={param_name : param_value}, echo=1)
     case "2":
         print("You have chosen DELETE")
         make_request(base_url, method='DELETE', params={'name': chosen_task_name})
