@@ -60,7 +60,35 @@ if response:
         print(f"{iterator+1} = {name_array[iterator]}")
         iterator += 1
 
-task_number = input("Choose Task from List using number or enter 0 to CREATE: ")
+task_number = input("Choose Task from List using number or enter 0 to POST: ")
+if(task_number == "0"):
+    print("You have chosen POST")
+    time.sleep(1)
+    clear()
+    create_name = input("input name: ")
+    create_operation = input("input operation: ")
+    create_destination = input("input destination: ")
+    create_interval = input("input interval: ")
+    create_duration = int(input("input duration: "))
+    create_log = int(input("input log: "))
+    create_task = {
+        "name": create_name,
+        "operation": create_operation,
+        "destination": create_destination,
+        "Parameters": {
+            "type": create_interval,
+            "duration": create_duration,
+            "log": create_log
+        }
+    }
+    clear()
+    print(f"Your new Task \"{create_name}\"")
+    print(json.dumps(create_task, indent=2))
+    print("POST is in progress...")
+    make_request(base_url, method='POST', data=create_task)
+    print("POST is finished")
+    exit()
+
 task_number = int(task_number) - 1
 if(name_array[task_number] is not None and name_array[task_number] != ""):
     clear()
@@ -106,7 +134,12 @@ match crud_input:
         make_request(base_url, method='PUT', params={'name': chosen_task_name}, data={param_name : param_value}, echo=1)
     case "2":
         print("You have chosen DELETE")
+        time.sleep(1)
+        clear()
+        print("DELETE is in progress...")
         make_request(base_url, method='DELETE', params={'name': chosen_task_name})
+        print("DELETE is in finished")
+        exit()
     case _:
         print("ERROR")
 
