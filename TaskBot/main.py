@@ -115,7 +115,7 @@ class TaskScheduler:
 
         try:
             # Perform the task operation
-            success = self.make_request(destination, method=operation, data=payload)
+            success, response = self.make_request(destination, method=operation, data=payload)
             task_logger.info(f"Execution info: Destination: {destination}, Operation: {operation}, Payload: {payload}")
 
             # Update task schedule
@@ -126,6 +126,10 @@ class TaskScheduler:
                     cursor.execute("""
                     UPDATE tasks SET next_execution = ? WHERE id = ?
                     """, (next_exec_time.isoformat(), task_id))
+                    if success:
+                        task_logger.info("Task execution successful")
+                    else:
+                        task_logger.warning(f"Task execution failed. Response: {response}")
                     task_logger.info(f"Task scheduled for next execution at {next_exec_time.isoformat()}")
                 elif task_type == 'single' and success:
                     cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
@@ -134,8 +138,8 @@ class TaskScheduler:
                 conn.commit()
         except Exception as e:
             print(f"Error executing task {name}: {e}")
-            system_logger.warning(f"Task execution failed: {name}")
-            task_logger.info(f"Error executing task: {e}")
+            system_logger.error(f"Task execution failed: {name}")
+            task_logger.error(f"Error executing task: {e}")
 
     def make_request(self,url, method=None, params=None, data=None, headers=None):
         """
@@ -162,12 +166,13 @@ class TaskScheduler:
             if data:
                 print(f"Data: {data}")
             print(f"Status Code: {response.status_code}")
-            print(f"Response: {response.text}") # TODO handle response for system_logger
+            print(f"Response: {response.text}")
             print("\n")
-            return  True
+            # Return True for successful HTTP status codes (2xx), and the response
+            return  response.ok, response
         except requests.RequestException as e:
             print(f"Error during request: {e}")
-            return  False
+            return  False, None
 
     def task_execution_loop(self):
         # Continuously check and execute due tasks.
@@ -285,11 +290,11 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                 if success:
                     self._set_headers(201)
                     self.wfile.write(json.dumps({"message": "Task added"}).encode())
-                    system_logger.info("New task added: %s", task_data["name"])
+                    system_logger.info(f"New task added: {task_data['name']}")
                 else:
                     self._set_headers(409)
                     self.wfile.write(json.dumps({"error": error}).encode())
-                    system_logger.warning(f"Failed to add task: {task_data["name"]}, Error: {error}")
+                    system_logger.warning(f"Failed to add task: {task_data['name']}, Error: {error}")
             except Exception as e:
                 self._set_headers(400)
                 self.wfile.write(json.dumps({"error": "Invalid data", "details": str(e)}).encode())
