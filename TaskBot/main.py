@@ -108,15 +108,15 @@ class TaskScheduler:
         # Execute the task and update the database accordingly.
         task_id, name, operation, task_type, interval, destination, payload, next_execution = task
         print(f"Executing task: {name}")
-        system_logger.info("Executing task: %s", name)
+        system_logger.info(f"Executing task: {name}")
         # Get the logger for the task
         task_logger = get_task_logger(name)
-        task_logger.info("Executing Task")
+        task_logger.info("Executing task...")
 
         try:
             # Perform the task operation
             success = self.make_request(destination, method=operation, data=payload)
-            task_logger.info("Execution info: Destination: %s, Operation: %s, Payload: %s", destination, operation, payload)
+            task_logger.info(f"Execution info: Destination: {destination}, Operation: {operation}, Payload: {payload}")
 
             # Update task schedule
             with sqlite3.connect(self.database_file) as conn:
@@ -126,15 +126,16 @@ class TaskScheduler:
                     cursor.execute("""
                     UPDATE tasks SET next_execution = ? WHERE id = ?
                     """, (next_exec_time.isoformat(), task_id))
-                    task_logger.info("Task scheduled for next execution at %s", next_exec_time.isoformat())
+                    task_logger.info(f"Task scheduled for next execution at {next_exec_time.isoformat()}")
                 elif task_type == 'single' and success:
                     cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+                    system_logger.info(f"Task deleted: {name}")
+                    task_logger.info("Task deleted")
                 conn.commit()
-                system_logger.info("Task deleted")
         except Exception as e:
             print(f"Error executing task {name}: {e}")
-            system_logger.warning("Task %s execution failed", name)
-            task_logger.info("Error executing task: %s", e)
+            system_logger.warning(f"Task execution failed: {name}")
+            task_logger.info(f"Error executing task: {e}")
 
     def make_request(self,url, method=None, params=None, data=None, headers=None):
         """
@@ -179,7 +180,7 @@ class TaskScheduler:
                     self.execute_task(task)
             except Exception as e:
                 print(f"Error in task execution loop: {e}")
-                system_logger.error("Error in task execution loop: %s", {e})
+                system_logger.error(f"Error in task execution loop: {e}")
             time.sleep(1)
 
 
@@ -288,7 +289,7 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                 else:
                     self._set_headers(409)
                     self.wfile.write(json.dumps({"error": error}).encode())
-                    system_logger.warning("Failed to add task: %s, Error: %s", task_data["name"], error)
+                    system_logger.warning(f"Failed to add task: {task_data["name"]}, Error: {error}")
             except Exception as e:
                 self._set_headers(400)
                 self.wfile.write(json.dumps({"error": "Invalid data", "details": str(e)}).encode())
@@ -308,11 +309,11 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                         "id": task[0], "name": task[1], "operation": task[2], "type": task[3],
                         "interval": task[4], "next_execution": task[5], "destination": task[6], "payload": task[7]
                     }).encode())
-                    system_logger.info("Task Retrieved: %s", task_name)
+                    system_logger.info(f"Task Retrieved: {task_name}")
                 else:
                     self._set_headers(404)
                     self.wfile.write(json.dumps({"error": "Task not found"}).encode())
-                    system_logger.info("Failed to retrieve Task: %s", task_name)
+                    system_logger.info(f"Failed to retrieve Task: {task_name}")
             else:
                 tasks = self.fetch_tasks()
                 self._set_headers(200)
@@ -335,11 +336,11 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                 if success:
                     self._set_headers(200)
                     self.wfile.write(json.dumps({"message": "Task updated"}).encode())
-                    system_logger.info("Task updated: %s", task_name)
+                    system_logger.info(f"Task updated: {task_name}")
                 else:
                     self._set_headers(404)
                     self.wfile.write(json.dumps({"error": "Task not found"}).encode())
-                    system_logger.warning("Failed to update task: %s, Error: %s", task_name, "Task not found")
+                    system_logger.warning(f"Failed to update task: c, Error: Task not found")
 
     def do_DELETE(self):
         # Handle DELETE requests to remove a task.
@@ -352,11 +353,11 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                 if success:
                     self._set_headers(200)
                     self.wfile.write(json.dumps({"message": "Task deleted"}).encode())
-                    system_logger.info("Task deleted: %s", task_name)
+                    system_logger.info(f"Task deleted: Task not found")
                 else:
                     self._set_headers(404)
                     self.wfile.write(json.dumps({"error": "Task not found"}).encode())
-                    system_logger.warning("Failed to delete task: %s, Error: %s", task_name, "Task not found")
+                    system_logger.warning(f"Failed to delete task: {task_name}, Error: Task not found")
 
 
 # Initialize the database
@@ -371,5 +372,5 @@ execution_thread.start()
 PORT = 8000
 with socketserver.TCPServer(("", PORT), MyHandler) as httpd:
     print(f"Serving at port {PORT}")
-    system_logger.debug("Serving at port %s", PORT)
+    system_logger.debug(f"Serving at port {PORT}")
     httpd.serve_forever()
