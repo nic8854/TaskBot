@@ -7,9 +7,33 @@ import threading
 import time
 from datetime import datetime, timedelta
 import requests
+import logging
+from logging.handlers import RotatingFileHandler
+import os
 
 # Initialize SQLite Database
 DATABASE_FILE = "tasks.db"
+
+# Configure the system logger
+system_logger = logging.getLogger("SystemLogger")
+system_logger.setLevel(logging.DEBUG)  # Log all levels
+
+# File handler with rotation
+file_handler = RotatingFileHandler(
+    'system.log', maxBytes=5 * 1024 * 1024, backupCount=5  # 5 MB per file, 5 backups
+)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+
+# Console handler for real-time monitoring
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+
+# Add handlers to the logger
+system_logger.addHandler(file_handler)
+system_logger.addHandler(console_handler)
+
+system_logger.debug("SERVER STARTED")
+
 
 def init_db():
     # Initialize the SQLite database and create the tasks table if not exists.
@@ -28,12 +52,32 @@ def init_db():
         )
         """)
         conn.commit()
+    system_logger.debug("Database initialized")
+
+def get_task_logger(task_name):
+    # Ensure the logs directory exists
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
+
+    # Create or retrieve the logger
+    task_logger = logging.getLogger(f"TaskLogger_{task_name}")
+    # Avoid adding multiple handlers
+    if not task_logger.hasHandlers():  
+        task_logger.setLevel(logging.DEBUG)
+
+        # File handler for the task log
+        task_file_handler = logging.FileHandler(f'logs/{task_name}.log')
+        task_file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        task_logger.addHandler(task_file_handler)
+
+    return task_logger
 
 
 class TaskScheduler:
     def __init__(self, database_file):
         self.database_file = database_file
         self.running = True
+        system_logger.debug("Task Scheduler started")
 
     def fetch_due_tasks(self):
         # Fetch tasks that are due for execution.
@@ -64,10 +108,15 @@ class TaskScheduler:
         # Execute the task and update the database accordingly.
         task_id, name, operation, task_type, interval, destination, payload, next_execution = task
         print(f"Executing task: {name}")
+        system_logger.info(f"Executing task: {name}")
+        # Get the logger for the task
+        task_logger = get_task_logger(name)
+        task_logger.info("Executing task...")
 
         try:
             # Perform the task operation
-            success = self.make_request(destination, method=operation, data=payload)
+            success, response = self.make_request(destination, method=operation, data=payload)
+            task_logger.info(f"Execution info: Destination: {destination}, Operation: {operation}, Payload: {payload}")
 
             # Update task schedule
             with sqlite3.connect(self.database_file) as conn:
@@ -77,11 +126,20 @@ class TaskScheduler:
                     cursor.execute("""
                     UPDATE tasks SET next_execution = ? WHERE id = ?
                     """, (next_exec_time.isoformat(), task_id))
+                    if success:
+                        task_logger.info("Task execution successful")
+                    else:
+                        task_logger.warning(f"Task execution failed. Response: {response}")
+                    task_logger.info(f"Task scheduled for next execution at {next_exec_time.isoformat()}")
                 elif task_type == 'single' and success:
                     cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+                    system_logger.info(f"Task deleted: {name}")
+                    task_logger.info("Task deleted")
                 conn.commit()
         except Exception as e:
             print(f"Error executing task {name}: {e}")
+            system_logger.error(f"Task execution failed: {name}")
+            task_logger.error(f"Error executing task: {e}")
 
     def make_request(self,url, method=None, params=None, data=None, headers=None):
         """
@@ -96,7 +154,8 @@ class TaskScheduler:
 
         if headers is None:
             headers = {'Content-Type': 'application/json'}
-        if isinstance(data, dict):  # Ensure the payload is serialized if it's a dictionary
+        # Ensure the payload is serialized if it's a dictionary
+        if isinstance(data, dict):  
             data = json.dumps(data)
 
         try:
@@ -109,10 +168,11 @@ class TaskScheduler:
             print(f"Status Code: {response.status_code}")
             print(f"Response: {response.text}")
             print("\n")
-            return  True
+            # Return True for successful HTTP status codes (2xx), and the response
+            return  response.ok, response
         except requests.RequestException as e:
             print(f"Error during request: {e}")
-            return  False
+            return  False, None
 
     def task_execution_loop(self):
         # Continuously check and execute due tasks.
@@ -125,7 +185,8 @@ class TaskScheduler:
                     self.execute_task(task)
             except Exception as e:
                 print(f"Error in task execution loop: {e}")
-            time.sleep(1)  # Check for tasks every second
+                system_logger.error(f"Error in task execution loop: {e}")
+            time.sleep(1)
 
 
 
@@ -160,7 +221,8 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                 # Set default values for interval and next_execution
                 interval = task_data.get("interval")
                 if interval is None:
-                    interval = 600  # default to 10 minutes if interval is None
+                    # default to 10 minutes if interval is None
+                    interval = 600 
                 next_execution = task_data.get("next_execution")
                 if next_execution is None:
                     next_execution = datetime.now().isoformat()
@@ -178,6 +240,8 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                     task_data.get("payload", None)
                 ))
                 conn.commit()
+                # Generate the logger for the task
+                task_logger = get_task_logger(task_data["name"]) 
                 return True, None
             except sqlite3.IntegrityError as e:
                 return False, str(e)
@@ -200,6 +264,9 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                 task_name
             ))
             conn.commit()
+            # Get the logger for the task
+            task_logger = get_task_logger(task_name)
+            task_logger.info("Task updated") # TODO add before and after values
             return cursor.rowcount > 0
 
     def delete_task(self, task_name):
@@ -208,6 +275,9 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
             cursor = conn.cursor()
             cursor.execute("DELETE FROM tasks WHERE name = ?", (task_name,))
             conn.commit()
+            # Get the logger for the task
+            task_logger = get_task_logger(task_name)
+            task_logger.info("Task deleted")
             return cursor.rowcount > 0
 
 
@@ -220,12 +290,15 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                 if success:
                     self._set_headers(201)
                     self.wfile.write(json.dumps({"message": "Task added"}).encode())
+                    system_logger.info(f"New task added: {task_data['name']}")
                 else:
                     self._set_headers(409)
                     self.wfile.write(json.dumps({"error": error}).encode())
+                    system_logger.warning(f"Failed to add task: {task_data['name']}, Error: {error}")
             except Exception as e:
                 self._set_headers(400)
                 self.wfile.write(json.dumps({"error": "Invalid data", "details": str(e)}).encode())
+                system_logger.warning("Error in POST /tasks: Invalid data")
 
     def do_GET(self):
         # Handle GET requests to retrieve tasks.
@@ -241,9 +314,11 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                         "id": task[0], "name": task[1], "operation": task[2], "type": task[3],
                         "interval": task[4], "next_execution": task[5], "destination": task[6], "payload": task[7]
                     }).encode())
+                    system_logger.info(f"Task Retrieved: {task_name}")
                 else:
                     self._set_headers(404)
                     self.wfile.write(json.dumps({"error": "Task not found"}).encode())
+                    system_logger.info(f"Failed to retrieve Task: {task_name}")
             else:
                 tasks = self.fetch_tasks()
                 self._set_headers(200)
@@ -266,9 +341,11 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                 if success:
                     self._set_headers(200)
                     self.wfile.write(json.dumps({"message": "Task updated"}).encode())
+                    system_logger.info(f"Task updated: {task_name}")
                 else:
                     self._set_headers(404)
                     self.wfile.write(json.dumps({"error": "Task not found"}).encode())
+                    system_logger.warning(f"Failed to update task: c, Error: Task not found")
 
     def do_DELETE(self):
         # Handle DELETE requests to remove a task.
@@ -281,9 +358,11 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                 if success:
                     self._set_headers(200)
                     self.wfile.write(json.dumps({"message": "Task deleted"}).encode())
+                    system_logger.info(f"Task deleted: Task not found")
                 else:
                     self._set_headers(404)
                     self.wfile.write(json.dumps({"error": "Task not found"}).encode())
+                    system_logger.warning(f"Failed to delete task: {task_name}, Error: Task not found")
 
 
 # Initialize the database
@@ -298,4 +377,5 @@ execution_thread.start()
 PORT = 8000
 with socketserver.TCPServer(("", PORT), MyHandler) as httpd:
     print(f"Serving at port {PORT}")
+    system_logger.debug(f"Serving at port {PORT}")
     httpd.serve_forever()
