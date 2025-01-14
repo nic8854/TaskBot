@@ -46,7 +46,7 @@ base_url = 'http://localhost:8000/tasks'
 
 clear()
 print("Getting List of Tasks...")
-response = make_request(base_url, echo=1)
+response = make_request(base_url)
 
 clear()
 
