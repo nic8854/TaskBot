@@ -46,7 +46,7 @@ base_url = 'http://localhost:8000/tasks'
 
 clear()
 print("Getting List of Tasks...")
-response = make_request(base_url)
+response = make_request(base_url, echo=1)
 
 clear()
 
@@ -62,25 +62,51 @@ if response:
 
 task_number = input("Choose Task from List using number or enter 0 to POST: ")
 if(task_number == "0"):
-    print("You have chosen POST")
-    time.sleep(1)
-    clear()
-    create_name = input("input name: ")
-    create_operation = input("input operation: ")
-    create_destination = input("input destination: ")
-    create_interval = input("input interval: ")
-    create_duration = int(input("input duration: "))
-    create_log = int(input("input log: "))
-    create_task = {
-        "name": create_name,
-        "operation": create_operation,
-        "destination": create_destination,
-        "Parameters": {
-            "type": create_interval,
-            "duration": create_duration,
-            "log": create_log
-        }
-    }
+    create_task = {}
+    while True:
+        create_name = input("input name (string): ")
+        if create_name:
+            create_task["name"] = create_name
+            break
+        else:
+            print("Invalid name. Please enter a name that is not empty.")
+    while True:
+        create_operation = input("input operation (get/post/put/delete): ")
+        if create_operation in {"get", "post", "put", "delete"}:
+            create_task["operation"] = create_operation
+            break
+        else:
+            print("Invalid operation. Please enter get, post, put or delete.")
+    while True:
+        create_type = input("input type (single/interval): ")
+        if create_type in {"single", "interval"}:
+            create_task["type"] = create_type
+            break
+        else:
+            print("Invalid type. Please enter single or interval.")
+    while True:
+        create_interval = input("input interval (seconds): ")
+        if create_interval and int(create_interval) > 0:
+            create_task["interval"] = int(create_interval)
+            break
+        else:
+            print("Invalid interval. Please enter a positive number.")
+
+    create_next_execution = input("input next execution (yyyy-mm-dd hh:mm:ss): ")
+    if create_next_execution:
+        create_task["next_execution"] = create_next_execution
+
+    create_payload = input("input payload (string): ")
+    if create_payload:
+        create_task["payload"] = create_payload
+    while True:
+        create_destination = input("input destination (url): ")
+        if create_destination:
+            create_task["destination"] = create_destination
+            break
+        else:
+            print("Invalid destinastion. Please enter a destination that is not empty.")
+            
     clear()
     print(f"Your new Task \"{create_name}\"")
     print(json.dumps(create_task, indent=2))
@@ -131,7 +157,8 @@ match crud_input:
 
         param_value = input("Enter value: ")
         print("PUT is in progress...")
-        make_request(base_url, method='PUT', params={'name': chosen_task_name}, data={param_name : param_value}, echo=1)
+        chosen_task_response[param_name] = param_value
+        make_request(base_url, method='PUT', params={'name': chosen_task_name}, data=chosen_task_response)
         print("PUT is in finished")
     case "2":
         print("You have chosen DELETE")
