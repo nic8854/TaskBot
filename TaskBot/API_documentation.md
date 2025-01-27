@@ -4,32 +4,34 @@
 ### Example Object
 ```
 {
-"name" : "Task1",
-"operation" : "get",
-"destination" : "http://localhost:8000",
-  "Parameters" {
-  "type" : "interval",
-  "duration" : 60,
-  "log" : 0
-  }
+  "id": 1,
+  "name": "Task1",
+  "operation": "get",
+  "type": "interval",
+  "interval": 30,
+  "next_execution": "2025-01-27T19:09:56.892221",
+  "destination": "https://google.com",
+  "payload": null
 }
 ```
-### Parameters
-#### Name
+### parameters
+#### ID
+ID of the Task
+#### name
 Name of the Task
-#### Operation
-Kind of Task: post, get, patch, delete
-#### Destination
-Url of desired Destination including Port
-#### Type
-Type of Task: interval, singleshot, onresponse
-#### Duration
-Duration in Seconds
-#### Log
-Log output as boolean: 0, 1
+#### operation
+Operation of Task to be executed: post, get, patch, delete
+#### type
+Type of Task: interval, single
+#### interval
+interval in Seconds
+### next_execution
+TIme of next execution in ISO-norm (Optional)
+#### destination
+Url for the task to call; needs to include http or https.
+#### payload
+Payload string to be sent as a parameter by the task.
 
-## Endpoints
+## Endpoint
 ### Tasks
-/Tasks
-### Log
-/Log
+"base-url"/Tasks
