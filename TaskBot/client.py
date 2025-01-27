@@ -6,16 +6,6 @@ import time
 clear = lambda: os.system('cls')
 
 def make_request(url, method='GET', params=None, data=None, headers=None, echo=0):
-    """
-    Sends an HTTP request and prints the response.
-
-    Args:
-        url (str): The endpoint URL.
-        method (str): The HTTP method (GET, POST, PUT, DELETE).
-        params (dict): URL query parameters.
-        data (dict): Request body payload.
-        headers (dict): HTTP headers.
-    """
     if headers is None:
         headers = {'Content-Type': 'application/json'}
 
